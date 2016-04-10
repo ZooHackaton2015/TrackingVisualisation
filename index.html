@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Simple Polylines</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        height: 100%;
+      }
+    </style>
+    <script src="https://code.jquery.com/jquery-1.12.3.min.js"></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>
+var apiKey = 'a4a7908c-1bf4-4ad0-84f6-169da82ee695';
+function parseCellIds(sms) {
+	var ceng = '+CENG:0,"';
+	var x, y = 0;
+	var label;
+	var arr = [];
+	while(true) {
+		x = sms.indexOf(ceng, y);
+		if(x < 0) {
+			break;
+		}
+		y = sms.lastIndexOf('\n', x);
+		if(y < 0) {
+			y = 0;
+		}
+		label = sms.substring(y, x);
+		x += ceng.length;
+		y = sms.indexOf('"', x + 2);
+		info = sms.substring(x + 1, y).split(',');
+		arr.push({
+			mcc: info[3],
+			mnc: info[4],
+			lac: info[7],
+			cellId: info[6],
+			label: label
+		});
+	}
+	return arr;
+}
+
+function getCellPath(ids) {
+	return $.map(ids, function(id) {
+		var x = getCellLocation(id);
+		if(x != null) {
+			x.label = id.label;
+			return x;
+		}
+	});
+}
+
+function initMap(trace) {
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 3,
+          center: {lat: 0, lng: -180},
+          mapTypeId: google.maps.MapTypeId.TERRAIN
+        });
+        
+        var path = new google.maps.Polyline({
+          path: trace,
+          geodesic: true,
+          strokeColor: '#FF0000',
+          strokeOpacity: 1.0,
+          strokeWeight: 2
+        });
+
+        path.setMap(map);
+	var bounds = new google.maps.LatLngBounds();
+	$.each(trace, function() {
+		var x = this;
+		bounds.extend({
+			lng: function() {
+				return x.lng;
+			},
+			lat: function() {
+				return x.lat;
+			}
+		});
+		var win = new google.maps.InfoWindow({
+			content: x.label,
+			maxWidth: 50
+		});
+		var mark = new google.maps.Marker({
+			position: x,
+			map: map,
+			title: 'cell'
+		});
+		mark.addListener('click', function() {
+			win.open(map, mark);
+		});
+	});
+	map.fitBounds(bounds);
+}
+
+function getCellLocation(info) {
+	if(info == null) {
+		return null;
+	}
+	var resp = $.ajax('http://opencellid.org/cell/get?key=' + apiKey + '&mcc=' + info.mcc + '&mnc=' + info.mnc + '&lac=' + info.lac + '&cellid=' + parseInt(info.cellId, 16) + '&format=json', {
+		async: false,
+		dataType: 'json'}
+	);
+	if(resp.status != 200) {
+		return null;
+	}
+	var data = resp.responseJSON;
+	if(data.code == 1) {
+		return null;
+	}
+	return {
+				'lng': data.lon,
+				'lat': data.lat
+			};
+}
+$(document).ready(function() {
+	$('#showMap').on('click', function() {
+		initMap(getCellPath(parseCellIds($('#input').val())));
+	});
+});
+    </script>
+    <textarea id="input" cols="50" rows="20">point 1+CENG:0,"0046,52,255,655,01,32,2C30,154,00,000,255"
+    point 2+CENG:0,"0046,52,255,230,02,32,161E,1227,00,000,255"
+    </textarea><button id="showMap" value="show">show</button>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDGv5V2S-MkTfjFCCAmv9fzrZ1z7uNk50A">
+    </script>
+  </body>
+</html>
